@@ -5,6 +5,9 @@ def desc():
     with open("README.md") as f:
         return f.read()
 
+def reqs():
+    with open('requirements.txt') as f:
+        return f.read().splitlines()
 
 setup(
     name='frasco-emails',
@@ -19,10 +22,5 @@ setup(
     include_package_data=True,
     zip_safe=False,
     platforms='any',
-    install_requires=[
-        'frasco',
-        'Flask-Mail==0.9.0',
-        'html2text==2014.7.3',
-        'premailer==2.5.0'
-    ]
+    install_requires=reqs() + ['frasco']
 )
