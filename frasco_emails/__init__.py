@@ -7,6 +7,13 @@ import html2text
 import premailer
 import os
 import datetime
+import re
+
+
+
+_url_regexp = re.compile(r'(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)')
+def clickable_links(text):
+    return _url_regexp.sub(r'<a href="\1">\1</a>', text)
 
 
 class EmailsFeature(Feature):
@@ -34,6 +41,7 @@ class EmailsFeature(Feature):
         self.jinja_env.macros = MacroRegistry(self.jinja_env) # the overlay methods does not call the constructor of extensions
         self.jinja_env.macros.register_from_template("layouts/macros.html")
         self.jinja_env.default_layout = self.options["default_layout"]
+        self.jinja_env.filters['clickable_links'] = clickable_links
 
         if (self.options["log_messages"] is not None and self.options["log_messages"]) or \
             (self.options["log_messages"] is None and app.testing):
@@ -66,7 +74,8 @@ class EmailsFeature(Feature):
             else:
                 text_body = rendered
                 if self.options["auto_render_missing_content_type"]:
-                    html_body = self.jinja_env.get_template("layouts/text.html").render(text_body=text_body, **vars)
+                    html_body = self.jinja_env.get_template("layouts/text.html").render(
+                        text_body=text_body, **vars)
 
         if html_body and self.options["inline_css"]:
             html_body = premailer.transform(html_body)
