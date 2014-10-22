@@ -1,14 +1,6 @@
 from setuptools import setup, find_packages
 
 
-def desc():
-    with open("README.md") as f:
-        return f.read()
-
-def reqs():
-    with open('requirements.txt') as f:
-        return f.read().splitlines()
-
 setup(
     name='frasco-emails',
     version='0.1',
@@ -17,10 +9,20 @@ setup(
     author='Maxime Bouroumeau-Fuseau',
     author_email='maxime.bouroumeau@gmail.com',
     description="Emails sending for Frasco",
-    long_description=desc(),
     packages=find_packages(),
-    include_package_data=True,
+    package_data={
+        'frasco_emails': [
+            'templates/*.html',
+            'templates/layouts/*.html',
+            'templates/layouts/MAILGUN_LICENSE',
+            'templates/layouts/MAILGUN_README.md']
+    },
     zip_safe=False,
     platforms='any',
-    install_requires=reqs() + ['frasco']
+    install_requires=[
+        # 'frasco',
+        'Flask-Mail>=0.9.0',
+        'html2text>=2014.7.3',
+        'premailer>=2.5.0'
+    ]
 )
