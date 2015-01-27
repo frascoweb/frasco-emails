@@ -1,8 +1,10 @@
 from frasco import Feature, action, current_context, OptionMissingError, translate, copy_extra_feature_options
 from jinja_macro_tags import MacroLoader, MacroRegistry
 from frasco.utils import parse_yaml_frontmatter
+from frasco.expression import compile_expr, eval_expr
 from flask_mail import Mail, Message, email_dispatched, Attachment, force_text
 from jinja2 import ChoiceLoader, FileSystemLoader, PackageLoader
+from contextlib import contextmanager
 import html2text
 import premailer
 import os
@@ -62,6 +64,7 @@ class EmailsFeature(Feature):
         frontmatter, source = parse_yaml_frontmatter(source)
         if frontmatter:
             vars = dict(frontmatter, **vars)
+        frontmatter = eval_expr(compile_expr(frontmatter), vars)
 
         filename, ext = os.path.splitext(template_filename)
         templates = [("%s.%s" % (filename, e), e) for e in ext[1:].split(",")]
@@ -129,9 +132,17 @@ class EmailsFeature(Feature):
 
     @action("stop_bulk_emails")
     def stop_bulk(self):
-        self.connection.__exit__() # see start_bulk()
+        self.connection.__exit__(None, None, None) # see start_bulk()
         self.connection = None
-    
+
+    @contextmanager
+    def bulk(self):
+        self.start_bulk()
+        try:
+            yield self
+        finally:
+            self.stop_bulk()
+
     @action("send_email")
     def send(self, to=None, tpl=None, **kwargs):
         msg = None
@@ -152,7 +163,7 @@ class EmailsFeature(Feature):
             self.client.send(msg)
 
     def log_message(self, message, app):
-        app.logger.debug("Email %s sent to %s" % (message.template, message.recipients))
+        app.logger.debug("Email %s sent to %s as \"%s\"" % (message.template, message.recipients, message.subject))
         if self.options["dump_logged_messages"]:
             path = os.path.join(app.root_path, self.options["dumped_messages_folder"])
             if not os.path.exists(path):
