@@ -1,9 +1,9 @@
-from frasco import Feature, action, current_context, OptionMissingError, translate, copy_extra_feature_options
+from frasco import Feature, action, current_context, OptionMissingError, copy_extra_feature_options, current_app
 from jinja_macro_tags import MacroLoader, MacroRegistry
 from frasco.utils import parse_yaml_frontmatter
 from frasco.expression import compile_expr, eval_expr
 from flask_mail import Mail, Message, email_dispatched, Attachment, force_text
-from jinja2 import ChoiceLoader, FileSystemLoader, PackageLoader
+from jinja2 import ChoiceLoader, FileSystemLoader, PackageLoader, TemplateNotFound
 from contextlib import contextmanager
 import html2text
 import premailer
@@ -28,7 +28,9 @@ class EmailsFeature(Feature):
                 "auto_render_missing_content_type": True,
                 "log_messages": None, # default is app.testing
                 "dump_logged_messages": True,
-                "dumped_messages_folder": "email_logs"}
+                "dumped_messages_folder": "email_logs",
+                "localized_emails": None,
+                "default_locale": None}
 
     def init_app(self, app):
         copy_extra_feature_options(self, app.config, "MAIL_")
@@ -49,6 +51,13 @@ class EmailsFeature(Feature):
             (self.options["log_messages"] is None and app.testing):
             email_dispatched.connect(self.log_message)
 
+        self.locale = None
+        if app.features.exists('babel'):
+            if self.options['default_locale'] is None:
+                self.options['default_locale'] = app.config['BABEL_DEFAULT_LOCALE']
+            if self.options['localized_emails'] is None:
+                self.options['localized_emails'] = '{locale}/{filename}'
+
     def add_template_folder(self, path):
         self.templates_loader.append(FileSystemLoader(path))
 
@@ -59,14 +68,32 @@ class EmailsFeature(Feature):
         text_body = None
         html_body = None
         vars = dict(self.options["default_template_vars"], **vars)
+        filename, ext = os.path.splitext(template_filename)
 
-        source, _, __ = self.jinja_env.loader.get_source(self.jinja_env, template_filename)
+        localized_filename = None
+        if self.options['localized_emails']:
+            locale = vars.get('locale', self.locale)
+            if locale is None and current_app.features.exists('babel'):
+                locale = current_context['current_locale']
+            if locale and locale != self.options['default_locale']:
+                localized_filename = self.options['localized_emails'].format(**{
+                    "locale": locale, "filename": template_filename,
+                    "name": filename, "ext": ext})
+
+        source = None
+        if localized_filename:
+            try:
+                source, _, __ = self.jinja_env.loader.get_source(self.jinja_env, localized_filename)
+                filename, ext = os.path.splitext(localized_filename)
+            except TemplateNotFound:
+                pass
+        if source is None:
+            source, _, __ = self.jinja_env.loader.get_source(self.jinja_env, template_filename)
         frontmatter, source = parse_yaml_frontmatter(source)
         if frontmatter:
             vars = dict(frontmatter, **vars)
         frontmatter = eval_expr(compile_expr(frontmatter), vars)
 
-        filename, ext = os.path.splitext(template_filename)
         templates = [("%s.%s" % (filename, e), e) for e in ext[1:].split(",")]
         for filename, ext in templates:
             rendered = self.jinja_env.get_template(filename).render(**vars)
@@ -100,7 +127,7 @@ class EmailsFeature(Feature):
 
         if not kwargs.get("subject"):
             raise OptionMissingError("Missing subject for email with template '%s'" % tpl)
-        subject = translate(kwargs.pop("subject"))
+        subject = kwargs.pop("subject")
         attachments = kwargs.pop("attachments", None)
 
         msg = Message(recipients=recipients, subject=subject, body=text_body, html=html_body, **kwargs)
@@ -174,7 +201,7 @@ class EmailsFeature(Feature):
                 "-".join(message.recipients)]))
             if message.body:
                 with open(filename + ".txt", "w") as f:
-                    f.write(message.body)
+                    f.write(message.body.encode('utf-8'))
             if message.html:
                 with open(filename + ".html", "w") as f:
-                    f.write(message.html)
+                    f.write(message.html.encode('utf-8'))
