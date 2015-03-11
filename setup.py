@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='frasco-emails',
-    version='0.2',
+    version='0.2.1',
     url='http://github.com/frascoweb/frasco-emails',
     license='MIT',
     author='Maxime Bouroumeau-Fuseau',
