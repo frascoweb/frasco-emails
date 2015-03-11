@@ -10,6 +10,7 @@ import premailer
 import os
 import datetime
 import re
+import markdown
 
 
 
@@ -30,7 +31,8 @@ class EmailsFeature(Feature):
                 "dump_logged_messages": True,
                 "dumped_messages_folder": "email_logs",
                 "localized_emails": None,
-                "default_locale": None}
+                "default_locale": None,
+                "markdown_options": {}}
 
     def init_app(self, app):
         copy_extra_feature_options(self, app.config, "MAIL_")
@@ -81,31 +83,47 @@ class EmailsFeature(Feature):
                     "name": filename, "ext": ext})
 
         source = None
-        if localized_filename:
+        for tpl_filename in [localized_filename, template_filename]:
+            if not tpl_filename:
+                continue
+            # only extract the frontmatter from the first template if
+            # multiple extensions are provided
+            filename, ext = os.path.splitext(tpl_filename)
+            if "," in ext:
+                tpl_filename = filename + ext.split(",")[0]
             try:
-                source, _, __ = self.jinja_env.loader.get_source(self.jinja_env, localized_filename)
-                filename, ext = os.path.splitext(localized_filename)
+                source, _, __ = self.jinja_env.loader.get_source(self.jinja_env, tpl_filename)
             except TemplateNotFound:
                 pass
+            if source:
+                break
         if source is None:
-            source, _, __ = self.jinja_env.loader.get_source(self.jinja_env, template_filename)
+            raise TemplateNotFound(template_filename)
+
         frontmatter, source = parse_yaml_frontmatter(source)
         if frontmatter:
+            frontmatter = eval_expr(compile_expr(frontmatter), vars)
             vars = dict(frontmatter, **vars)
-        frontmatter = eval_expr(compile_expr(frontmatter), vars)
 
         templates = [("%s.%s" % (filename, e), e) for e in ext[1:].split(",")]
-        for filename, ext in templates:
-            rendered = self.jinja_env.get_template(filename).render(**vars)
+        for tpl_filename, ext in templates:
+            rendered = self.jinja_env.get_template(tpl_filename).render(**vars)
             if ext == "html":
                 html_body = rendered
-                if self.options["auto_render_missing_content_type"]:
-                    text_body = html2text.html2text(html_body)
-            else:
+            elif ext == "txt":
                 text_body = rendered
-                if self.options["auto_render_missing_content_type"]:
-                    html_body = self.jinja_env.get_template("layouts/text.html").render(
-                        text_body=text_body, **vars)
+            elif ext == "md":
+                text_body = rendered
+                content = markdown.markdown(rendered, **self.options["markdown_options"])
+                html_body = self.jinja_env.get_template("layouts/markdown.html").render(
+                    content=content, **vars)
+
+        if self.options["auto_render_missing_content_type"]:
+            if html_body is None:
+                html_body = self.jinja_env.get_template("layouts/text.html").render(
+                    text_body=text_body, **vars)
+            if text_body is None:
+                text_body = html2text.html2text(html_body)
 
         if html_body and self.options["inline_css"]:
             html_body = premailer.transform(html_body)

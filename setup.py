@@ -23,6 +23,7 @@ setup(
         'frasco',
         'Flask-Mail>=0.9.0',
         'html2text>=2014.7.3',
-        'premailer>=2.5.0'
+        'premailer>=2.5.0',
+        'Markdown>=2.4.1'
     ]
 )
