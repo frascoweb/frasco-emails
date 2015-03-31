@@ -66,7 +66,8 @@ class EmailsFeature(Feature):
     def add_templates_from_package(self, pkg_name, pkg_path="emails"):
         self.templates_loader.append(PackageLoader(pkg_name, pkg_path))
 
-    def render_message(self, template_filename, **vars):
+    def render_message(self, template_filename, auto_render_missing_content_type=None,\
+                       auto_html_layout="layouts/text.html", auto_markdown_template="layouts/markdown.html", **vars):
         text_body = None
         html_body = None
         vars = dict(self.options["default_template_vars"], **vars)
@@ -75,7 +76,7 @@ class EmailsFeature(Feature):
         localized_filename = None
         if self.options['localized_emails']:
             locale = vars.get('locale', self.locale)
-            if locale is None and current_app.features.exists('babel'):
+            if locale is None and 'current_locale' in current_context:
                 locale = current_context['current_locale']
             if locale and locale != self.options['default_locale']:
                 localized_filename = self.options['localized_emails'].format(**{
@@ -115,12 +116,13 @@ class EmailsFeature(Feature):
             elif ext == "md":
                 text_body = rendered
                 content = markdown.markdown(rendered, **self.options["markdown_options"])
-                html_body = self.jinja_env.get_template("layouts/markdown.html").render(
+                html_body = self.jinja_env.get_template(auto_markdown_template).render(
                     content=content, **vars)
 
-        if self.options["auto_render_missing_content_type"]:
+        if (auto_render_missing_content_type is not None and auto_render_missing_content_type) or \
+          (auto_render_missing_content_type is None and self.options["auto_render_missing_content_type"]):
             if html_body is None:
-                html_body = self.jinja_env.get_template("layouts/text.html").render(
+                html_body = self.jinja_env.get_template(auto_html_layout).render(
                     text_body=text_body, **vars)
             if text_body is None:
                 text_body = html2text.html2text(html_body)
@@ -139,7 +141,7 @@ class EmailsFeature(Feature):
         for k in ('subject', 'sender', 'cc', 'bcc', 'attachments', 'reply_to', 'send_date', 'charset', 'extra_headers'):
             if k in vars:
                 kwargs[k] = vars[k]
-            elif k in frontmatter:
+            elif frontmatter and k in frontmatter:
                 kwargs[k] = frontmatter[k]
         kwargs["date"] = kwargs.pop("send_date", None)
 
