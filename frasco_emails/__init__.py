@@ -32,7 +32,8 @@ class EmailsFeature(Feature):
                 "dumped_messages_folder": "email_logs",
                 "localized_emails": None,
                 "default_locale": None,
-                "markdown_options": {}}
+                "markdown_options": {},
+                "silent_failures": False}
 
     def init_app(self, app):
         copy_extra_feature_options(self, app.config, "MAIL_")
@@ -172,7 +173,12 @@ class EmailsFeature(Feature):
 
     @action("start_bulk_emails")
     def start_bulk(self):
-        self.connection = self.client.connect()
+        try:
+            self.connection = self.client.connect()
+        except Exception as e:
+            if not self.options['silent_failures']:
+                raise e
+            current_app.logger.error(e)
         # simulate entering a with context
         # (flask-mail does not provide a way to connect otherwise)
         self.connection.__enter__()
@@ -204,10 +210,15 @@ class EmailsFeature(Feature):
                 raise OptionMissingError("A template must be provided when sending an email")
             msg = self.create_message(to, tpl, **kwargs)
 
-        if self.connection:
-            self.connection.send(msg)
-        else:
-            self.client.send(msg)
+        try:
+            if self.connection:
+                self.connection.send(msg)
+            else:
+                self.client.send(msg)
+        except Exception as e:
+            if not self.options['silent_failures']:
+                raise e
+            current_app.logger.error(e)
 
     def log_message(self, message, app):
         app.logger.debug("Email %s sent to %s as \"%s\"" % (message.template, message.recipients, message.subject))
