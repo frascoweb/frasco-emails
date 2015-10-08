@@ -208,9 +208,9 @@ class EmailsFeature(Feature):
                 raise OptionMissingError("A recipient must be provided when sending an email")
             if not tpl:
                 raise OptionMissingError("A template must be provided when sending an email")
-            msg = self.create_message(to, tpl, **kwargs)
 
         try:
+            msg = self.create_message(to, tpl, **kwargs)
             if self.connection:
                 self.connection.send(msg)
             else:
