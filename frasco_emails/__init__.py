@@ -5,13 +5,18 @@ from frasco.expression import compile_expr, eval_expr
 from flask_mail import Mail, Message, email_dispatched, Attachment, force_text
 from jinja2 import ChoiceLoader, FileSystemLoader, PackageLoader, TemplateNotFound
 from contextlib import contextmanager
-import html2text
 import premailer
 import os
 import datetime
 import re
 import markdown
 
+try:
+    # html2text being licensed under the GPL, it is not
+    # directly included and may be not available
+    import html2text
+except ImportError:
+    html2text = None
 
 
 _url_regexp = re.compile(r'(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)')
@@ -125,7 +130,7 @@ class EmailsFeature(Feature):
             if html_body is None:
                 html_body = self.jinja_env.get_template(auto_html_layout).render(
                     text_body=text_body, **vars)
-            if text_body is None:
+            if text_body is None and html2text is not None:
                 text_body = html2text.html2text(html_body)
 
         if html_body and self.options["inline_css"]:

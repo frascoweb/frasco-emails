@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='frasco-emails',
-    version='0.2.5',
+    version='0.3',
     url='http://github.com/frascoweb/frasco-emails',
     license='MIT',
     author='Maxime Bouroumeau-Fuseau',
@@ -22,7 +22,6 @@ setup(
     install_requires=[
         'frasco',
         'Flask-Mail>=0.9.0',
-        'html2text>=2014.7.3',
         'premailer>=2.5.0',
         'Markdown>=2.4.1'
     ]

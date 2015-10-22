@@ -27,6 +27,10 @@ Options:
 
 Plus all the options of Flask-Mail.
 
+For licensing reason, *html2text* is not included in the dependencies. It is needed to convert html emails to text in the case *auto_render_missing_content_type* is set to true. Install it using pip if you plan on converting html emails to text:
+
+    $ pip install html2text
+
 ## Email templates
 
 Templates for your emails are located in the *emails* folder. Templates can
