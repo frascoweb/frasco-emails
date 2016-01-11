@@ -183,7 +183,7 @@ class EmailsFeature(Feature):
         except Exception as e:
             if not self.options['silent_failures']:
                 raise e
-            current_app.logger.error(e)
+            current_app.log_exception(e)
         # simulate entering a with context
         # (flask-mail does not provide a way to connect otherwise)
         self.connection.__enter__()
@@ -223,7 +223,7 @@ class EmailsFeature(Feature):
         except Exception as e:
             if not self.options['silent_failures']:
                 raise e
-            current_app.logger.error(e)
+            current_app.log_exception(e)
 
     def log_message(self, message, app):
         app.logger.debug("Email %s sent to %s as \"%s\"" % (message.template, message.recipients, message.subject))
