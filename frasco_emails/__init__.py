@@ -18,6 +18,11 @@ try:
 except ImportError:
     html2text = None
 
+try:
+    from cpickle import pickle
+except ImportError:
+    import pickle
+
 
 _url_regexp = re.compile(r'(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)')
 def clickable_links(text):
@@ -38,7 +43,8 @@ class EmailsFeature(Feature):
                 "localized_emails": None,
                 "default_locale": None,
                 "markdown_options": {},
-                "silent_failures": False}
+                "silent_failures": False,
+                "send_async": False}
 
     def init_app(self, app):
         copy_extra_feature_options(self, app.config, "MAIL_")
@@ -201,8 +207,7 @@ class EmailsFeature(Feature):
         finally:
             self.stop_bulk()
 
-    @action("send_email")
-    def send(self, to=None, tpl=None, **kwargs):
+    def _prepare_action_message(self, to=None, tpl=None, **kwargs):
         msg = None
         if isinstance(to, Message):
             msg = to
@@ -215,7 +220,14 @@ class EmailsFeature(Feature):
                 raise OptionMissingError("A template must be provided when sending an email")
 
         try:
-            msg = self.create_message(to, tpl, **kwargs)
+            return self.create_message(to, tpl, **kwargs)
+        except Exception as e:
+            if not self.options['silent_failures']:
+                raise e
+            current_app.log_exception(e)
+
+    def _send_message(self, msg):
+        try:
             if self.connection:
                 self.connection.send(msg)
             else:
@@ -224,6 +236,29 @@ class EmailsFeature(Feature):
             if not self.options['silent_failures']:
                 raise e
             current_app.log_exception(e)
+
+    def _send_async(self, msg):
+        current_app.features.tasks.enqueue('send_async_email_task', pickled_msg=pickle.dumps(msg))
+
+    @action("send_email")
+    def send(self, to=None, tpl=None, **kwargs):
+        force_sync = kwargs.pop('_force_sync', False)
+        msg = self._prepare_action_message(to, tpl, **kwargs)
+        if msg:
+            if self.options['send_async'] and not force_sync:
+                self._send_async(msg)
+            else:
+                self._send_message(msg)
+
+    @action("send_async_email")
+    def send_async(self, *args, **kwargs):
+        msg = self._prepare_action_message(to, tpl, **kwargs)
+        if msg:
+            self._send_async(msg)
+
+    @action("send_async_email_task")
+    def send_async_task(self, pickled_msg):
+        self._send_message(pickle.loads(pickled_msg))
 
     def log_message(self, message, app):
         app.logger.debug("Email %s sent to %s as \"%s\"" % (message.template, message.recipients, message.subject))
