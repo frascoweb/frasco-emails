@@ -238,7 +238,7 @@ class EmailsFeature(Feature):
             current_app.log_exception(e)
 
     def _send_async(self, msg):
-        current_app.features.tasks.enqueue('send_async_email_task', pickled_msg=pickle.dumps(msg))
+        current_app.features.tasks.enqueue('send_async_email_task', pickled_msg=pickle.dumps(msg).decode('latin1'))
 
     @action("send_email")
     def send(self, to=None, tpl=None, **kwargs):
@@ -258,7 +258,7 @@ class EmailsFeature(Feature):
 
     @action("send_async_email_task")
     def send_async_task(self, pickled_msg):
-        self._send_message(pickle.loads(pickled_msg))
+        self._send_message(pickle.loads(pickled_msg.encode('latin1')))
 
     def log_message(self, message, app):
         app.logger.debug("Email %s sent to %s as \"%s\"" % (message.template, message.recipients, message.subject))
