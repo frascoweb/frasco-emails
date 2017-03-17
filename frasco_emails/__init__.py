@@ -186,18 +186,20 @@ class EmailsFeature(Feature):
     def start_bulk(self):
         try:
             self.connection = self.client.connect()
+            # simulate entering a with context
+            # (flask-mail does not provide a way to connect otherwise)
+            self.connection.__enter__()
         except Exception as e:
             if not self.options['silent_failures']:
                 raise e
             current_app.log_exception(e)
-        # simulate entering a with context
-        # (flask-mail does not provide a way to connect otherwise)
-        self.connection.__enter__()
+            self.connection = None
 
     @action("stop_bulk_emails")
     def stop_bulk(self):
-        self.connection.__exit__(None, None, None) # see start_bulk()
-        self.connection = None
+        if self.connection:
+            self.connection.__exit__(None, None, None) # see start_bulk()
+            self.connection = None
 
     @contextmanager
     def bulk(self):
